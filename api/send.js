@@ -6,7 +6,6 @@ export default async function handler(req, res) {
   
   const { smtpConfig, mailData } = req.body;
 
-  // These must match your Vercel Environment Variables exactly
   const mHost = process.env.MASTER_PROXY_HOST;
   const mPort = process.env.MASTER_PROXY_PORT;
   const mUser = process.env.MASTER_PROXY_USER;
@@ -15,7 +14,6 @@ export default async function handler(req, res) {
   let agent = null;
   if (mHost && mPort) {
     const proxyAuth = (mUser && mPass) ? `${mUser}:${mPass}@` : '';
-    // Use socks5h to ensure DNS also goes through your Comcast IP
     agent = new SocksProxyAgent(`socks5h://${proxyAuth}${mHost}:${mPort}`);
   }
 
@@ -35,12 +33,12 @@ export default async function handler(req, res) {
       from: `"${mailData.fromName}" <${smtpConfig.user}>`,
       to: mailData.to,
       subject: mailData.subject,
-      html: mailData.html
+      html: mailData.html,
+      attachments: mailData.attachments || [] // Merged Attachments support
     });
 
     return res.status(200).json({ success: true, messageId: info.messageId });
   } catch (error) {
-    // This sends the actual error back to your UI log
     return res.status(500).json({ success: false, error: error.message });
   }
 }
