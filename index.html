@@ -6,6 +6,8 @@
     <title>P7M ULTRA | Enterprise Delivery</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap" rel="stylesheet">
     <style>
         :root { --rb: linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8b00ff); }
@@ -82,6 +84,26 @@
                 </div></div>
             </div>
 
+            <div class="grid grid-cols-2 gap-4">
+                <div class="premium-border">
+                    <div class="glass-card p-3">
+                        <p class="text-[9px] font-black text-blue-400 uppercase mb-2">Attachments (PDF/JPG/PNG/PPTX)</p>
+                        <input type="file" id="f-attach" multiple class="text-[10px] w-full text-zinc-500 mb-2">
+                        <div id="attach-list" class="text-[9px] text-zinc-400 font-mono space-y-1"></div>
+                    </div>
+                </div>
+                <div class="premium-border">
+                    <div class="glass-card p-3">
+                        <p class="text-[9px] font-black text-orange-400 uppercase mb-2">Payload Converters</p>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="convertTo('pdf')" class="bg-zinc-800 p-2 rounded text-[8px] font-bold hover:bg-zinc-700">TO PDF</button>
+                            <button onclick="convertTo('jpg')" class="bg-zinc-800 p-2 rounded text-[8px] font-bold hover:bg-zinc-700">TO JPG</button>
+                            <button onclick="convertTo('html')" class="bg-zinc-800 p-2 rounded text-[8px] font-bold hover:bg-zinc-700">EXPORT</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="premium-border">
                 <div class="glass-card p-5 space-y-4">
                     <div class="grid grid-cols-2 gap-3">
@@ -124,6 +146,64 @@
     <script>
         let smtps = [], targets = [], sent = 0, fail = 0, isRunning = false;
         let smtpPointer = 0, batchTracker = 0;
+        let attachments = [];
+
+        // Handle Attachment Selection
+        document.getElementById('f-attach').onchange = async (e) => {
+            const files = Array.from(e.target.files);
+            attachments = [];
+            const list = document.getElementById('attach-list');
+            list.innerHTML = "";
+
+            for (const file of files) {
+                const base64 = await toBase64(file);
+                attachments.push({
+                    filename: file.name,
+                    content: base64.split(',')[1],
+                    encoding: 'base64'
+                });
+                list.innerHTML += `<div class="truncate">📎 ${file.name}</div>`;
+            }
+        };
+
+        const toBase64 = file => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+        });
+
+        // Converter Logic
+        async function convertTo(type) {
+            const frame = document.getElementById('p-frame');
+            const content = frame.contentDocument.body;
+
+            if (type === 'html') {
+                const blob = new Blob([assemblePayloadString()], { type: 'text/html' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = "payload_export.html";
+                link.click();
+            } else {
+                const canvas = await html2canvas(content, { useCORS: true, scale: 2 });
+                const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                
+                if (type === 'jpg') {
+                    const link = document.createElement('a');
+                    link.href = imgData;
+                    link.download = "payload_preview.jpg";
+                    link.click();
+                } else if (type === 'pdf') {
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF();
+                    const imgProps = pdf.getImageProperties(imgData);
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+                    pdf.save("payload_preview.pdf");
+                }
+            }
+        }
 
         function toggleBatchInput() {
             const mode = document.getElementById('rotation-mode').value;
@@ -173,8 +253,6 @@
             const btnText = document.getElementById('btn-text').value;
 
             const fontMatrix = ['Arial','Verdana','Tahoma','Trebuchet MS','Times New Roman','Georgia','Garamond','Courier New','Palatino','Bookman','Helvetica','Calibri','Candara','Optima','Segoe UI','Century Gothic','Futura','Gill Sans','Baskerville','Cambria','Constantia','Rockwell','Consolas','Open Sans','Roboto','Lato','Montserrat','Oswald','Raleway','Merriweather','Noto Sans','Playfair Display'];
-
-            // HARDENED INLINE HIDING: Gmail cannot ignore these inline styles
             const hideStyle = "display:none !important; visibility:hidden !important; mso-hide:all !important; font-size:0px !important; line-height:0px !important; max-height:0px !important; color:transparent !important; opacity:0 !important; overflow:hidden !important;";
 
             const generateInvisibleNoise = (count) => {
@@ -236,7 +314,8 @@
                         fromName: document.getElementById('s-name').value,
                         to: targets[i][0], 
                         subject: document.getElementById('s-sub').value, 
-                        html: assemblePayloadString() 
+                        html: assemblePayloadString(),
+                        attachments: attachments // Included attachments
                     }
                 };
 
