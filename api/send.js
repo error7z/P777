@@ -44,7 +44,7 @@ export default async function handler(req, res) {
       list: {
         // One-Click Unsubscribe is REQUIRED for Inbox placement in 2026
         unsubscribe: {
-          url: 'https://yourdomain.com/unsubscribe',
+          url: 'https://vpn-servic.site/unsubscribe',
           comment: 'Unsubscribe from this list'
         }
       },
