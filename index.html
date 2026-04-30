@@ -3,11 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>P7M ULTRA | Enterprise Delivery</title>
+    <title>P7M ULTRA | Enterprise Delivery v3.5</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap" rel="stylesheet">
     <style>
         :root { --rb: linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8b00ff); }
@@ -58,7 +56,8 @@
                     <div id="batch-container" class="hidden">
                         <input type="number" id="batch-count" value="10" placeholder="Batch Size" class="input-glow save-data text-[10px]">
                     </div>
-                    <input type="number" id="send-delay" placeholder="Delay Time (MS)" value="3000" class="input-glow save-data">
+                    <input type="number" id="send-delay" placeholder="Delay Time (MS)" value="5000" class="input-glow save-data">
+                    <p class="text-[8px] text-zinc-500 italic">* Jitter (±500ms) will be applied automatically.</p>
                 </div>
             </div>
 
@@ -84,33 +83,13 @@
                 </div></div>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
-                <div class="premium-border">
-                    <div class="glass-card p-3">
-                        <p class="text-[9px] font-black text-blue-400 uppercase mb-2">Attachments (PDF/JPG/PNG/PPTX)</p>
-                        <input type="file" id="f-attach" multiple class="text-[10px] w-full text-zinc-500 mb-2">
-                        <div id="attach-list" class="text-[9px] text-zinc-400 font-mono space-y-1"></div>
-                    </div>
-                </div>
-                <div class="premium-border">
-                    <div class="glass-card p-3">
-                        <p class="text-[9px] font-black text-orange-400 uppercase mb-2">Payload Converters</p>
-                        <div class="grid grid-cols-3 gap-2">
-                            <button onclick="convertTo('pdf')" class="bg-zinc-800 p-2 rounded text-[8px] font-bold hover:bg-zinc-700">TO PDF</button>
-                            <button onclick="convertTo('jpg')" class="bg-zinc-800 p-2 rounded text-[8px] font-bold hover:bg-zinc-700">TO JPG</button>
-                            <button onclick="convertTo('html')" class="bg-zinc-800 p-2 rounded text-[8px] font-bold hover:bg-zinc-700">EXPORT</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <div class="premium-border">
                 <div class="glass-card p-5 space-y-4">
                     <div class="grid grid-cols-2 gap-3">
                         <input type="text" id="s-name" placeholder="Sender Name" class="input-glow save-data">
                         <input type="text" id="s-sub" placeholder="Subject Line" class="input-glow save-data">
                     </div>
-                    <textarea id="plain-body" class="input-glow h-20 save-data" placeholder="Plain Text Layer (Optional)"></textarea>
+                    <textarea id="plain-body" class="input-glow h-20 save-data" placeholder="Plain Text Layer (Required for Inboxing)"></textarea>
 
                     <div class="bg-blue-900/10 p-4 rounded-xl grid grid-cols-3 gap-3">
                         <div class="col-span-2"><input type="text" id="btn-url" placeholder="Redirect URL" class="input-glow save-data"></div>
@@ -146,64 +125,6 @@
     <script>
         let smtps = [], targets = [], sent = 0, fail = 0, isRunning = false;
         let smtpPointer = 0, batchTracker = 0;
-        let attachments = [];
-
-        // Handle Attachment Selection
-        document.getElementById('f-attach').onchange = async (e) => {
-            const files = Array.from(e.target.files);
-            attachments = [];
-            const list = document.getElementById('attach-list');
-            list.innerHTML = "";
-
-            for (const file of files) {
-                const base64 = await toBase64(file);
-                attachments.push({
-                    filename: file.name,
-                    content: base64.split(',')[1],
-                    encoding: 'base64'
-                });
-                list.innerHTML += `<div class="truncate">📎 ${file.name}</div>`;
-            }
-        };
-
-        const toBase64 = file => new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = error => reject(error);
-        });
-
-        // Converter Logic
-        async function convertTo(type) {
-            const frame = document.getElementById('p-frame');
-            const content = frame.contentDocument.body;
-
-            if (type === 'html') {
-                const blob = new Blob([assemblePayloadString()], { type: 'text/html' });
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = "payload_export.html";
-                link.click();
-            } else {
-                const canvas = await html2canvas(content, { useCORS: true, scale: 2 });
-                const imgData = canvas.toDataURL('image/jpeg', 1.0);
-                
-                if (type === 'jpg') {
-                    const link = document.createElement('a');
-                    link.href = imgData;
-                    link.download = "payload_preview.jpg";
-                    link.click();
-                } else if (type === 'pdf') {
-                    const { jsPDF } = window.jspdf;
-                    const pdf = new jsPDF();
-                    const imgProps = pdf.getImageProperties(imgData);
-                    const pdfWidth = pdf.internal.pageSize.getWidth();
-                    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-                    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-                    pdf.save("payload_preview.pdf");
-                }
-            }
-        }
 
         function toggleBatchInput() {
             const mode = document.getElementById('rotation-mode').value;
@@ -246,47 +167,58 @@
 
         function updatePreview() { document.getElementById('p-frame').srcdoc = assemblePayloadString(); saveAllData(); }
 
+        // --- UPDATED REPUTATION ENGINE ---
         function assemblePayloadString() {
             const plain = document.getElementById('plain-body').value;
             let htmlContent = document.getElementById('s-body').value;
             const btnUrl = document.getElementById('btn-url').value;
             const btnText = document.getElementById('btn-text').value;
 
-            const fontMatrix = ['Arial','Verdana','Tahoma','Trebuchet MS','Times New Roman','Georgia','Garamond','Courier New','Palatino','Bookman','Helvetica','Calibri','Candara','Optima','Segoe UI','Century Gothic','Futura','Gill Sans','Baskerville','Cambria','Constantia','Rockwell','Consolas','Open Sans','Roboto','Lato','Montserrat','Oswald','Raleway','Merriweather','Noto Sans','Playfair Display'];
-            const hideStyle = "display:none !important; visibility:hidden !important; mso-hide:all !important; font-size:0px !important; line-height:0px !important; max-height:0px !important; color:transparent !important; opacity:0 !important; overflow:hidden !important;";
+            // Use standard fonts to blend in with legitimate business mail
+            const safeFonts = ['Arial', 'Verdana', 'Tahoma', 'Georgia', 'Helvetica'];
+            const ghostChars = ['\u200B', '\u200C', '\u200D'];
 
-            const generateInvisibleNoise = (count) => {
-                let noise = "";
-                for(let i=0; i < count; i++) { 
-                    noise += Math.random().toString(36).substring(2, 9) + " " + (Math.random() * 9999).toFixed(0) + " ";
-                }
-                return `<div style="${hideStyle}">${noise}</div>`;
-            };
-
-            const randomizeWordStructure = (text) => {
+            const cleanWordStructure = (text) => {
                 if (!text) return "";
                 return text.split(' ').map(word => {
-                    const font = fontMatrix[Math.floor(Math.random() * fontMatrix.length)];
-                    const size = (13 + Math.random() * 2).toFixed(2) + 'px';
-                    const ghost = `<span style="${hideStyle}">${Math.random().toString(36).substring(2, 4)}</span>`;
-                    return `<span style="font-family:${font}; font-size:${size};">${word}${ghost}</span>`;
+                    const font = safeFonts[Math.floor(Math.random() * safeFonts.length)];
+                    const ghost = ghostChars[Math.floor(Math.random() * ghostChars.length)];
+                    // Breaks signature scanning without visible junk
+                    return `<span style="font-family:${font};">${word}${ghost}</span>`;
                 }).join(' ');
             };
 
             let buttonHtml = "";
             if(btnUrl && btnText) {
-                buttonHtml = `<div style="text-align:center; margin:20px 0;"><a href="${btnUrl}" style="background-color:#3b82f6; color:#ffffff; padding:12px 25px; text-decoration:none; border-radius:6px; font-family:Arial, sans-serif; font-size:16px; font-weight:bold; display:inline-block;">${btnText}</a></div>`;
+                buttonHtml = `
+                    <table border="0" cellpadding="0" cellspacing="0" style="margin: 25px auto;">
+                        <tr>
+                            <td align="center" bgcolor="#3b82f6" style="border-radius: 6px;">
+                                <a href="${btnUrl}" target="_blank" style="padding: 14px 30px; color: #ffffff; text-decoration: none; font-family: sans-serif; font-size: 16px; font-weight: bold; display: inline-block;">
+                                    ${btnText}
+                                </a>
+                            </td>
+                        </tr>
+                    </table>`;
             }
 
             return `
-                ${generateInvisibleNoise(150)}
-                <div style="color:#000000; background-color:#ffffff; font-size:14px; line-height:1.5; margin:0 auto; max-width:600px;">
-                    <div style="padding:10px;">${randomizeWordStructure(plain)}</div>
-                    <div style="display:block;">
-                        ${htmlContent.includes('{{LINK_BUTTON}}') ? htmlContent.replace('{{LINK_BUTTON}}', buttonHtml) : (htmlContent + buttonHtml)}
+                <!DOCTYPE html>
+                <html lang="en">
+                <body style="margin:0; padding:20px; background-color:#ffffff; font-family:sans-serif; color:#1f2937;">
+                    <div style="max-width:600px; margin:0 auto;">
+                        <div style="font-size:15px; line-height:1.6; margin-bottom:20px;">
+                            ${cleanWordStructure(plain)}
+                        </div>
+                        <div style="display:block;">
+                            ${htmlContent.includes('{{LINK_BUTTON}}') ? htmlContent.replace('{{LINK_BUTTON}}', buttonHtml) : (htmlContent + buttonHtml)}
+                        </div>
+                        <div style="margin-top:40px; border-top:1px solid #f3f4f6; padding-top:20px; font-size:11px; color:#9ca3af; text-align:center;">
+                            If you'd like to stop receiving these, you can <a href="#" style="color:#9ca3af;">unsubscribe here</a>.
+                        </div>
                     </div>
-                </div>
-                ${generateInvisibleNoise(150)}
+                </body>
+                </html>
             `;
         }
 
@@ -297,6 +229,7 @@
 
             for(let i=0; i < targets.length; i++) {
                 if(!isRunning) break;
+                
                 const mode = document.getElementById('rotation-mode').value;
                 const batchSize = parseInt(document.getElementById('batch-count').value) || 10;
                 let currentSmtp;
@@ -314,19 +247,37 @@
                         fromName: document.getElementById('s-name').value,
                         to: targets[i][0], 
                         subject: document.getElementById('s-sub').value, 
-                        html: assemblePayloadString(),
-                        attachments: attachments // Included attachments
+                        html: assemblePayloadString() 
                     }
                 };
 
                 try {
-                    const res = await fetch('/api/send', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+                    const res = await fetch('/api/send', { 
+                        method: 'POST', 
+                        headers: {'Content-Type':'application/json'}, 
+                        body: JSON.stringify(payload) 
+                    });
                     const result = await res.json();
-                    if(res.ok && result.success) { sent++; addLog(`SUCCESS: ${targets[i][0]}`, "text-green-400"); }
-                    else { fail++; addLog(`BLOCK: ${targets[i][0]}`, "text-red-500"); }
-                } catch (err) { fail++; }
+                    
+                    if(res.ok && result.success) { 
+                        sent++; 
+                        addLog(`SUCCESS: ${targets[i][0]}`, "text-green-400"); 
+                    }
+                    else { 
+                        fail++; 
+                        addLog(`BLOCK: ${targets[i][0]} (SMTP: ${currentSmtp[0].substring(0,4)}...)`, "text-red-500"); 
+                    }
+                } catch (err) { 
+                    fail++; 
+                    addLog(`CRITICAL ERROR: Connection Failed`, "text-red-600 font-bold");
+                }
+
                 updateStats();
-                await new Promise(r => setTimeout(r, parseInt(document.getElementById('send-delay').value)));
+                
+                // Jitter Delay: Base + (Random -500 to +500ms)
+                const baseDelay = parseInt(document.getElementById('send-delay').value);
+                const jitter = Math.floor(Math.random() * 1000) - 500;
+                await new Promise(r => setTimeout(r, Math.max(1000, baseDelay + jitter)));
             }
             isRunning = false; toggleUI(false);
         }
@@ -344,11 +295,11 @@
         function saveAllData() {
             const data = {};
             document.querySelectorAll('.save-data').forEach(el => data[el.id] = el.value);
-            localStorage.setItem('p7m_ultra_v3', JSON.stringify(data));
+            localStorage.setItem('p7m_ultra_v3_updated', JSON.stringify(data));
         }
 
         window.onload = () => {
-            const saved = localStorage.getItem('p7m_ultra_v3');
+            const saved = localStorage.getItem('p7m_ultra_v3_updated');
             if(saved) {
                 const data = JSON.parse(saved);
                 Object.keys(data).forEach(k => { if(document.getElementById(k)) document.getElementById(k).value = data[k]; });
